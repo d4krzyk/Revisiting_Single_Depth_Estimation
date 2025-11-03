@@ -35,51 +35,50 @@ def test(test_loader, model, thre):
     for i, sample_batched in enumerate(test_loader):
         image, depth = sample_batched['image'], sample_batched['depth']
 
-        depth = depth.cuda(async=True)
-        image = image.cuda()
+        depth = depth.cuda(non_blocking=True)
+        image = image.cuda(non_blocking=True)
 
-        image = torch.autograd.Variable(image, volatile=True)
-        depth = torch.autograd.Variable(depth, volatile=True)
- 
-        output = model(image)
-        output = torch.nn.functional.upsample(output, size=[depth.size(2),depth.size(3)], mode='bilinear')
+        with torch.no_grad():
+            output = model(image)
+            output = torch.nn.functional.interpolate(output, size=(depth.size(2), depth.size(3)), mode='bilinear',
+                                                     align_corners=False)
 
-        depth_edge = edge_detection(depth)
-        output_edge = edge_detection(output)
+            depth_edge = edge_detection(depth)
+            output_edge = edge_detection(output)
 
-        batchSize = depth.size(0)
-        totalNumber = totalNumber + batchSize
-        errors = util.evaluateError(output, depth)
-        errorSum = util.addErrors(errorSum, errors, batchSize)
-        averageError = util.averageErrors(errorSum, totalNumber)
+            batchSize = depth.size(0)
+            totalNumber = totalNumber + batchSize
+            errors = util.evaluateError(output, depth)
+            errorSum = util.addErrors(errorSum, errors, batchSize)
+            averageError = util.averageErrors(errorSum, totalNumber)
 
-        edge1_valid = (depth_edge > thre)
-        edge2_valid = (output_edge > thre)
+            edge1_valid = (depth_edge > thre)
+            edge2_valid = (output_edge > thre)
 
-        nvalid = np.sum(torch.eq(edge1_valid, edge2_valid).float().data.cpu().numpy())
-        A = nvalid / (depth.size(2)*depth.size(3))
+            nvalid = np.sum(torch.eq(edge1_valid, edge2_valid).float().data.cpu().numpy())
+            A = nvalid / (depth.size(2)*depth.size(3))
 
-        nvalid2 = np.sum(((edge1_valid + edge2_valid) ==2).float().data.cpu().numpy())
-        P = nvalid2 / (np.sum(edge2_valid.data.cpu().numpy()))
-        R = nvalid2 / (np.sum(edge1_valid.data.cpu().numpy()))
+            nvalid2 = np.sum(((edge1_valid + edge2_valid) ==2).float().data.cpu().numpy())
+            P = nvalid2 / (np.sum(edge2_valid.data.cpu().numpy()))
+            R = nvalid2 / (np.sum(edge1_valid.data.cpu().numpy()))
 
-        F = (2 * P * R) / (P + R)
+            F = (2 * P * R) / (P + R)
 
-        Ae += A
-        Pe += P
-        Re += R
-        Fe += F
+            Ae += A
+            Pe += P
+            Re += R
+            Fe += F
 
-    Av = Ae / totalNumber
-    Pv = Pe / totalNumber
-    Rv = Re / totalNumber
-    Fv = Fe / totalNumber
-    print('PV', Pv)
-    print('RV', Rv)
-    print('FV', Fv)
+        Av = Ae / totalNumber
+        Pv = Pe / totalNumber
+        Rv = Re / totalNumber
+        Fv = Fe / totalNumber
+        print('PV', Pv)
+        print('RV', Rv)
+        print('FV', Fv)
 
-    averageError['RMSE'] = np.sqrt(averageError['MSE'])
-    print(averageError)
+        averageError['RMSE'] = np.sqrt(averageError['MSE'])
+        print(averageError)
 
 def define_model(is_resnet, is_densenet, is_senet):
     if is_resnet:
