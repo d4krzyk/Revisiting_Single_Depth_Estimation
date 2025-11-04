@@ -91,7 +91,8 @@ class ToTensor(object):
         elif pic.mode == 'I;16':
             img = torch.from_numpy(np.array(pic, np.int16, copy=False))
         else:
-            img = torch.ByteTensor(torch.ByteStorage.from_buffer(pic.tobytes()))
+            img = torch.as_tensor(bytearray(pic.tobytes()), dtype=torch.uint8)
+            # img = torch.ByteTensor(torch.ByteStorage.from_buffer(pic.tobytes()))
         # PIL image mode: 1, L, P, I, F, RGB, YCbCr, RGBA, CMYK
         if pic.mode == 'YCbCr':
             nchannel = 3
@@ -100,10 +101,11 @@ class ToTensor(object):
         else:
             nchannel = len(pic.mode)
         img = img.view(pic.size[1], pic.size[0], nchannel)
+        img = img.permute(2, 0, 1).contiguous()
         # put it from HWC to CHW format
         # yikes, this transpose takes 80% of the loading time/CPU
-        img = img.transpose(0, 1).transpose(0, 2).contiguous()
-        if isinstance(img, torch.ByteTensor):
+        # img = img.transpose(0, 1).transpose(0, 2).contiguous()
+        if img.dtype == torch.uint8:
             return img.float().div(255)
         else:
             return img

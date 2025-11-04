@@ -1,0 +1,46 @@
+# .gitignore content
+
+# Jeśli katalogi są w podfolderze projektu, dopisz ścieżki względne, np:
+/data/
+/pretrained_model/
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# IDE / editor
+.idea/
+.vscode/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# PyTorch / model checkpoints
+*.pth
+*.pt
+*.ckpt
+*.h5
+*.npz
+
+# Logs, outputs, cache
+*.log
+results/
+logs/
+.cache/
+.pytest_cache/
+
+# Packaging / build
+build/
+dist/
+*.egg-info/
+
+# System files
+.DS_Store
+Thumbs.db
+
+# Optional: pozwól zostawić pusty plik .gitkeep w katalogu danych jeśli chcesz śledzić pusty katalog
+# !data/.gitkeep

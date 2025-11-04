@@ -15,8 +15,8 @@ class depthDataset(Dataset):
         self.transform = transform
 
     def __getitem__(self, idx):
-        image_name = self.frame.ix[idx, 0]
-        depth_name = self.frame.ix[idx, 1]
+        image_name = self.frame.iloc[idx, 0]
+        depth_name = self.frame.iloc[idx, 1]
 
         image = Image.open(image_name)
         depth = Image.open(depth_name)

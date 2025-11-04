@@ -1,4 +1,3 @@
-
 import torch
 import numpy as np
 from PIL import Image, ImageOps
@@ -62,10 +61,10 @@ class RandomHorizontalFlip(object):
 
         if not _is_pil_image(image):
             raise TypeError(
-                'img should be PIL Image. Got {}'.format(type(img)))
+                'image should be PIL Image. Got {}'.format(type(image)))
         if not _is_pil_image(depth):
             raise TypeError(
-                'img should be PIL Image. Got {}'.format(type(depth)))
+                'depth should be PIL Image. Got {}'.format(type(depth)))
 
         if random.random() < 0.5:
             image = image.transpose(Image.FLIP_LEFT_RIGHT)
@@ -182,7 +181,6 @@ class ToTensor(object):
 
         if isinstance(pic, np.ndarray):
             img = torch.from_numpy(pic.transpose((2, 0, 1)))
-
             return img.float().div(255)
 
         if accimage is not None and isinstance(pic, accimage.Image):
@@ -193,13 +191,14 @@ class ToTensor(object):
 
         # handle PIL Image
         if pic.mode == 'I':
-            img = torch.from_numpy(np.array(pic, np.int32, copy=False))
+            arr = np.asarray(pic, dtype=np.int32)
+            img = torch.from_numpy(arr)
         elif pic.mode == 'I;16':
-            img = torch.from_numpy(np.array(pic, np.int16, copy=False))
+            arr = np.asarray(pic, dtype=np.int16)
+            img = torch.from_numpy(arr)
         else:
-            img = torch.ByteTensor(
-                torch.ByteStorage.from_buffer(pic.tobytes()))
-        # PIL image mode: 1, L, P, I, F, RGB, YCbCr, RGBA, CMYK
+            img = torch.as_tensor(bytearray(pic.tobytes()), dtype=torch.uint8)
+
         if pic.mode == 'YCbCr':
             nchannel = 3
         elif pic.mode == 'I;16':
@@ -210,7 +209,8 @@ class ToTensor(object):
         # put it from HWC to CHW format
         # yikes, this transpose takes 80% of the loading time/CPU
         img = img.transpose(0, 1).transpose(0, 2).contiguous()
-        if isinstance(img, torch.ByteTensor):
+        # sprawdzamy dtype zamiast klasy (zgodnie z nowszym PyTorch)
+        if img.dtype == torch.uint8:
             return img.float().div(255)
         else:
             return img
@@ -226,9 +226,11 @@ class Lighting(object):
     def __call__(self, sample):
         image, depth = sample['image'], sample['depth']
         if self.alphastd == 0:
-            return image
+            # zachowaj spójny format zwracanych danych (słownik sample)
+            return {'image': image, 'depth': depth}
 
-        alpha = image.new().resize_(3).normal_(0, self.alphastd)
+        # utwórz alpha jako tensor float na tym samym device i dtype co image
+        alpha = image.new_empty(3).normal_(0, self.alphastd)
         rgb = self.eigvec.type_as(image).clone()\
             .mul(alpha.view(1, 3).expand(3, 3))\
             .mul(self.eigval.view(1, 3).expand(3, 3))\
@@ -242,10 +244,21 @@ class Lighting(object):
 class Grayscale(object):
 
     def __call__(self, img):
+        # img: Tensor (C, H, W)
+        # jeśli obraz już jest jednokanałowy, zwróć jak jest
+        if img.size(0) == 1:
+            return img
+        # oblicz ważoną sumę kanałów (bez użycia przestarzałego add_(alpha, other))
+        r = img[0]
+        g = img[1]
+        b = img[2]
+        gray = 0.299 * r + 0.587 * g + 0.114 * b
         gs = img.clone()
-        gs[0].mul_(0.299).add_(0.587, gs[1]).add_(0.114, gs[2])
-        gs[1].copy_(gs[0])
-        gs[2].copy_(gs[0])
+        gs[0].copy_(gray)
+        if gs.size(0) > 1:
+            gs[1].copy_(gray)
+        if gs.size(0) > 2:
+            gs[2].copy_(gray)
         return gs
 
 
@@ -296,7 +309,8 @@ class RandomOrder(object):
 
         if self.transforms is None:
             return {'image': image, 'depth': depth}
-        order = torch.randperm(len(self.transforms))
+        # randperm zwraca tensor — skonwertuj do listy intów przed indexowaniem
+        order = torch.randperm(len(self.transforms)).tolist()
         for i in order:
             image = self.transforms[i](image)
 

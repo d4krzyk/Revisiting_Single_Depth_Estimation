@@ -11,6 +11,7 @@ import matplotlib.image
 import matplotlib.pyplot as plt
 plt.set_cmap("jet")
 
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 def define_model(is_resnet, is_densenet, is_senet):
     if is_resnet:
@@ -28,24 +29,47 @@ def define_model(is_resnet, is_densenet, is_senet):
 
     return model
    
+def _strip_module_prefix(state_dict):
+    if any(k.startswith('module.') for k in state_dict.keys()):
+        return {k.replace('module.', '', 1): v for k, v in state_dict.items()}
+    return state_dict
+
 
 def main():
     model = define_model(is_resnet=False, is_densenet=False, is_senet=True)
-    model = torch.nn.DataParallel(model).cuda()
-    model.load_state_dict(torch.load('./pretrained_model/model_senet'))
+
+    if torch.cuda.device_count() > 1:
+        model = torch.nn.DataParallel(model)
+
+    # Wczytaj stan z mapowaniem na aktualne urządzenie (CPU lub GPU)
+    path = './pretrained_model/model_senet'
+    loaded = torch.load(path, map_location=device)
+
+    # obsłuż różne formaty pliku (bezpośredni state_dict lub dict zawierający 'state_dict')
+    state_dict = loaded.get('state_dict', loaded) if isinstance(loaded, dict) else loaded
+    state_dict = _strip_module_prefix(state_dict)
+
+    model.load_state_dict(state_dict)
+    model.to(device)
     model.eval()
 
     nyu2_loader = loaddata.readNyu2('data/demo/img_nyu2.png')
-  
-    test(nyu2_loader, model)
+
+    test(nyu2_loader, model, device)
 
 
-def test(nyu2_loader, model):
+def test(nyu2_loader, model, device):
     for i, image in enumerate(nyu2_loader):     
-        image = torch.autograd.Variable(image, volatile=True).cuda()
-        out = model(image)
-        
-        matplotlib.image.imsave('data/demo/out.png', out.view(out.size(2),out.size(3)).data.cpu().numpy())
+        image = image.to(device)
+
+        with torch.no_grad():
+            out = model(image)
+        # obsłuż różne wymiary wyjścia: usuń wymiary batch i channel jeśli są
+        out_np = out.squeeze().cpu().numpy()
+
+        # zapisz obraz wyniku
+        matplotlib.image.imsave('data/demo/out.png', out_np)
+
 
 if __name__ == '__main__':
     main()

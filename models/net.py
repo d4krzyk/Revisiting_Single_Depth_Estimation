@@ -1,3 +1,6 @@
+
+from __future__ import absolute_import, division, print_function
+
 from collections import OrderedDict
 import math
 import torch
@@ -6,12 +9,13 @@ import torch.nn as nn
 from torch.utils import model_zoo
 import copy
 import numpy as np
-import modules
+from . import modules
 from torchvision import utils
 
-import senet
-import resnet
-import densenet
+from . import resnet
+from . import densenet
+from . import senet
+
 
 class model(nn.Module):
     def __init__(self, Encoder, num_features, block_channel):

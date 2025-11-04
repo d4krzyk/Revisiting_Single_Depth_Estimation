@@ -1,3 +1,6 @@
+
+from __future__ import absolute_import, division, print_function
+
 from collections import OrderedDict
 import math
 import torch
@@ -6,9 +9,9 @@ import torch.nn as nn
 from torch.utils import model_zoo
 import copy
 import numpy as np
-import senet
-import resnet
-import densenet
+from . import resnet
+from . import densenet
+from . import senet
 
 class _UpProjection(nn.Sequential):
 
@@ -28,7 +31,8 @@ class _UpProjection(nn.Sequential):
         self.bn2 = nn.BatchNorm2d(num_output_features)
 
     def forward(self, x, size):
-        x = F.upsample(x, size=size, mode='bilinear')
+        # x = F.upsample(x, size=size, mode='bilinear')
+        x = F.interpolate(x, size=size, mode='bilinear', align_corners=False)
         x_conv1 = self.relu(self.bn1(self.conv1(x)))
         bran1 = self.bn1_2(self.conv1_2(x_conv1))
         bran2 = self.bn2(self.conv2(x))
